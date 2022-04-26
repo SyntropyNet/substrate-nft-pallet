@@ -36,7 +36,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::FullCodec;
+use codec::{FullCodec, Decode};
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure,
     traits::{EnsureOrigin, Get},
@@ -44,10 +44,11 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 use sp_runtime::traits::{Hash, Member};
-use sp_std::{cmp::Eq, fmt::Debug, vec::Vec};
+use sp_std::{cmp::Eq, fmt::Debug, vec::Vec, convert::TryInto};
 
 pub mod nft;
 pub use crate::nft::UniqueAssets;
+use scale_info::TypeInfo;
 
 #[cfg(test)]
 mod mock;
@@ -59,7 +60,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
     /// The dispatch origin that is able to mint new instances of this type of commodity.
     type CommodityAdmin: EnsureOrigin<Self::Origin>;
     /// The data type that is used to describe this type of commodity.
-    type CommodityInfo: Hashable + Member + Debug + Default + FullCodec + Ord;
+    type CommodityInfo: Hashable + Member + Debug + FullCodec + Ord + TypeInfo;
     /// The maximum number of this type of commodity that may exist (minted - burned).
     type CommodityLimit: Get<u128>;
     /// The maximum number of this type of commodity that any single account may own.
@@ -72,6 +73,7 @@ pub type CommodityId<T> = <T as frame_system::Config>::Hash;
 
 /// Associates a commodity with its ID.
 pub type Commodity<T, I> = (CommodityId<T>, <T as Config<I>>::CommodityInfo);
+
 
 decl_storage! {
     trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Commodity {
@@ -264,7 +266,7 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
     fn burn(commodity_id: &CommodityId<T>) -> dispatch::DispatchResult {
         let owner = Self::owner_of(commodity_id);
         ensure!(
-            owner != T::AccountId::default(),
+            owner != T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes()).unwrap(),
             Error::<T, I>::NonexistentCommodity
         );
 
@@ -288,7 +290,7 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
     ) -> dispatch::DispatchResult {
         let owner = Self::owner_of(&commodity_id);
         ensure!(
-            owner != T::AccountId::default(),
+            owner != T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes()).unwrap(),
             Error::<T, I>::NonexistentCommodity
         );
 
