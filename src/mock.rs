@@ -2,8 +2,8 @@
 use crate as pallet_nft;
 
 use crate::{Config, Module};
+use frame_support::parameter_types;
 use frame_support::traits::Contains;
-use frame_support::{parameter_types};
 use frame_system as system;
 
 use sp_core::H256;
