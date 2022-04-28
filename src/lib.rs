@@ -36,7 +36,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{FullCodec, Decode};
+use codec::FullCodec;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, dispatch, ensure,
     traits::{EnsureOrigin, Get},
@@ -44,7 +44,7 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 use sp_runtime::traits::{Hash, Member};
-use sp_std::{cmp::Eq, fmt::Debug, vec::Vec, convert::TryInto};
+use sp_std::{cmp::Eq, convert::TryInto, fmt::Debug, vec::Vec};
 
 pub mod nft;
 pub use crate::nft::UniqueAssets;
@@ -73,7 +73,6 @@ pub type CommodityId<T> = <T as frame_system::Config>::Hash;
 
 /// Associates a commodity with its ID.
 pub type Commodity<T, I> = (CommodityId<T>, <T as Config<I>>::CommodityInfo);
-
 
 decl_storage! {
     trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Commodity {
@@ -269,10 +268,7 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
     fn burn(commodity_id: &CommodityId<T>) -> dispatch::DispatchResult {
         let owner = Self::owner_of(commodity_id);
 
-        ensure!(
-            owner.is_some(),
-            Error::<T, I>::NonexistentCommodity
-        );
+        ensure!(owner.is_some(), Error::<T, I>::NonexistentCommodity);
 
         let owner = owner.unwrap();
 
@@ -295,10 +291,7 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
         commodity_id: &CommodityId<T>,
     ) -> dispatch::DispatchResult {
         let owner = Self::owner_of(&commodity_id);
-        ensure!(
-            owner.is_some(),
-            Error::<T, I>::NonexistentCommodity
-        );
+        ensure!(owner.is_some(), Error::<T, I>::NonexistentCommodity);
 
         ensure!(
             Self::total_for_account(dest_account) < T::UserCommodityLimit::get(),
