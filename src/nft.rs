@@ -39,7 +39,7 @@ pub trait UniqueAssets<AccountId> {
     /// The set of unique assets owned by an account.
     fn assets_for_account(account: &AccountId) -> Vec<(Self::AssetId, Self::AssetInfo)>;
     /// The ID of the account that owns an asset.
-    fn owner_of(asset_id: &Self::AssetId) -> AccountId;
+    fn owner_of(asset_id: &Self::AssetId) -> Option<AccountId>;
 
     /// Use the provided asset info to create a new unique asset for the specified user.
     /// This method **must** return an error in the following cases:

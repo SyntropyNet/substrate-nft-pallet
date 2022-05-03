@@ -44,10 +44,11 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 use sp_runtime::traits::{Hash, Member};
-use sp_std::{cmp::Eq, fmt::Debug, vec::Vec};
+use sp_std::{cmp::Eq, convert::TryInto, fmt::Debug, vec::Vec};
 
 pub mod nft;
 pub use crate::nft::UniqueAssets;
+use scale_info::TypeInfo;
 
 #[cfg(test)]
 mod mock;
@@ -59,7 +60,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
     /// The dispatch origin that is able to mint new instances of this type of commodity.
     type CommodityAdmin: EnsureOrigin<Self::Origin>;
     /// The data type that is used to describe this type of commodity.
-    type CommodityInfo: Hashable + Member + Debug + Default + FullCodec + Ord;
+    type CommodityInfo: Hashable + Member + Debug + FullCodec + Ord + TypeInfo;
     /// The maximum number of this type of commodity that may exist (minted - burned).
     type CommodityLimit: Get<u128>;
     /// The maximum number of this type of commodity that any single account may own.
@@ -84,7 +85,7 @@ decl_storage! {
         /// A mapping from an account to a list of all of the commodities of this type that are owned by it.
         CommoditiesForAccount get(fn commodities_for_account): map hasher(blake2_128_concat) T::AccountId => Vec<Commodity<T, I>>;
         /// A mapping from a commodity ID to the account that owns it.
-        AccountForCommodity get(fn account_for_commodity): map hasher(identity) CommodityId<T> => T::AccountId;
+        AccountForCommodity get(fn account_for_commodity): map hasher(identity) CommodityId<T> => Option<T::AccountId>;
     }
 
     add_extra_genesis {
@@ -170,7 +171,8 @@ decl_module! {
         #[weight = 10_000]
         pub fn burn(origin, commodity_id: CommodityId<T>) -> dispatch::DispatchResult {
             let who = ensure_signed(origin)?;
-            ensure!(who == Self::account_for_commodity(&commodity_id), Error::<T, I>::NotCommodityOwner);
+            let owner = Self::account_for_commodity(&commodity_id);
+            ensure!(owner.is_some() && who == owner.unwrap(), Error::<T, I>::NotCommodityOwner);
 
             <Self as UniqueAssets<_>>::burn(&commodity_id)?;
             Self::deposit_event(RawEvent::Burned(commodity_id.clone()));
@@ -190,7 +192,9 @@ decl_module! {
         #[weight = 10_000]
         pub fn transfer(origin, dest_account: T::AccountId, commodity_id: CommodityId<T>) -> dispatch::DispatchResult {
             let who = ensure_signed(origin)?;
-            ensure!(who == Self::account_for_commodity(&commodity_id), Error::<T, I>::NotCommodityOwner);
+            let owner = Self::account_for_commodity(&commodity_id);
+
+            ensure!(owner.is_some() && who == owner.unwrap(), Error::<T, I>::NotCommodityOwner);
 
             <Self as UniqueAssets<_>>::transfer(&dest_account, &commodity_id)?;
             Self::deposit_event(RawEvent::Transferred(commodity_id.clone(), dest_account.clone()));
@@ -221,7 +225,7 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
         Self::commodities_for_account(account)
     }
 
-    fn owner_of(commodity_id: &CommodityId<T>) -> T::AccountId {
+    fn owner_of(commodity_id: &CommodityId<T>) -> Option<T::AccountId> {
         Self::account_for_commodity(commodity_id)
     }
 
@@ -263,10 +267,10 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
 
     fn burn(commodity_id: &CommodityId<T>) -> dispatch::DispatchResult {
         let owner = Self::owner_of(commodity_id);
-        ensure!(
-            owner != T::AccountId::default(),
-            Error::<T, I>::NonexistentCommodity
-        );
+
+        ensure!(owner.is_some(), Error::<T, I>::NonexistentCommodity);
+
+        let owner = owner.unwrap();
 
         Total::<I>::mutate(|total| *total -= 1);
         Burned::<I>::mutate(|total| *total += 1);
@@ -287,15 +291,14 @@ impl<T: Config<I>, I: Instance> UniqueAssets<T::AccountId> for Module<T, I> {
         commodity_id: &CommodityId<T>,
     ) -> dispatch::DispatchResult {
         let owner = Self::owner_of(&commodity_id);
-        ensure!(
-            owner != T::AccountId::default(),
-            Error::<T, I>::NonexistentCommodity
-        );
+        ensure!(owner.is_some(), Error::<T, I>::NonexistentCommodity);
 
         ensure!(
             Self::total_for_account(dest_account) < T::UserCommodityLimit::get(),
             Error::<T, I>::TooManyCommoditiesForAccount
         );
+
+        let owner = owner.unwrap();
 
         TotalForAccount::<T, I>::mutate(&owner, |total| *total -= 1);
         TotalForAccount::<T, I>::mutate(dest_account, |total| *total += 1);
